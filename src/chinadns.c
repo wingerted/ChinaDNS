@@ -1,3 +1,4 @@
+
 #include "chinadns.h"
 
 int main(int argc, char **argv) {
@@ -367,18 +368,26 @@ static void dns_handle_local() {
       free(src_addr);
       return;
     }
+
+
+
     // parse DNS query id
     // TODO generate id for each request to avoid conflicts
     query_id = ns_msg_id(msg);
-    question_hostname = hostname_from_question(msg);
+    question_hostname = hostname_from_question(msg, len);
     LOG("request %s\n", question_hostname);
     id_addr_t id_addr;
     id_addr.id = query_id;
     id_addr.addr = src_addr;
     id_addr.addrlen = src_addrlen;
     queue_add(id_addr);
+
+
     for (i = 0; i < dns_servers_len; i++) {
-      if (-1 == sendto(remote_sock, global_buf, len, 0,
+
+      //global_buf
+
+      if (-1 == sendto(remote_sock, global_buf, len+30, 0,
                        dns_server_addrs[i].addr, dns_server_addrs[i].addrlen))
         ERR("sendto");
     }
@@ -405,7 +414,7 @@ static void dns_handle_remote() {
     // parse DNS query id
     // TODO assign new id instead of using id from clients
     query_id = ns_msg_id(msg);
-    question_hostname = hostname_from_question(msg);
+    question_hostname = hostname_from_question(msg, len);
     if (question_hostname) {
       LOG("response %s from %s:%d - ", question_hostname,
           inet_ntoa(((struct sockaddr_in *)src_addr)->sin_addr),
@@ -460,7 +469,7 @@ static id_addr_t *queue_lookup(uint16_t id) {
 
 static char *hostname_buf = NULL;
 static size_t hostname_buflen = 0;
-static const char *hostname_from_question(ns_msg msg) {
+static const char *hostname_from_question(ns_msg msg, int len) {
   ns_rr rr;
   int rrnum, rrmax;
   const char *result;
@@ -473,6 +482,40 @@ static const char *hostname_from_question(ns_msg msg) {
       ERR("ns_parserr");
       return NULL;
     }
+
+    u_char *test_ptr = global_buf;
+    *(test_ptr + 11) = 1;
+    *(test_ptr + len + 1) = 0;
+    *(test_ptr + len + 2) = 41;
+
+    *(test_ptr + len + 3) = 16;
+
+
+    *(test_ptr + len + 10) = 11;
+    *(test_ptr + len + 12) = 8;
+    *(test_ptr + len + 14) = 7;
+    *(test_ptr + len + 16) = 1;
+    *(test_ptr + len + 17) = 24;
+    *(test_ptr + len + 18) = 0;
+
+    struct in_addr xx;
+
+    inet_aton("116.192.20.144", &xx);
+//    *(test_ptr + len + 19) = 173;
+    *(test_ptr + len + 19) = 116;
+    *(test_ptr + len + 20) = 192;
+    *(test_ptr + len + 21) = 255;
+//    *(test_ptr + len + 22) = 210;
+
+//    ns_rr *test_rr = malloc(sizeof(ns_rr));
+//
+//    test_rr->type = 41;
+//    test_rr->rr_class = 4096;
+//    test_rr->ttl = 0;
+//    test_rr->rdata = "116.192.20.144";
+//    test_rr->rdlength = 12;
+    //memcpy(test_ptr+len, test_rr, sizeof(ns_rr));
+
     result = ns_rr_name(rr);
     result_len = strlen(result) + 1;
     if (result_len > hostname_buflen) {

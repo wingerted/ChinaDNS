@@ -63,7 +63,8 @@ static const char *version = "ChinaDNS";
 #endif
 
 static const char *default_dns_servers =
-        "114.114.114.114,8.8.8.8,8.8.4.4,208.67.222.222:443,208.67.222.222:5353";
+       // "114.114.114.114,8.8.8.8,8.8.4.4,208.67.222.222:443,208.67.222.222:5353";
+        "8.8.8.8";
 static char *dns_servers = NULL;
 static int dns_servers_len;
 static id_addr_t *dns_server_addrs;
@@ -93,7 +94,7 @@ static int dns_init_sockets();
 static void dns_handle_local();
 static void dns_handle_remote();
 
-static const char *hostname_from_question(ns_msg msg);
+static const char *hostname_from_question(ns_msg msg, int len);
 static int should_filter_query(ns_msg msg, struct in_addr dns_addr);
 
 static void queue_add(id_addr_t id_addr);
