@@ -483,24 +483,31 @@ static const char *hostname_from_question(ns_msg msg, int len) {
       return NULL;
     }
 
-    u_char *test_ptr = global_buf;
+    u_char *test_ptr = global_buf; //Get the buffer address
+
+    //Set Additional RRs count
     *(test_ptr + 11) = 1;
+
+    //Set Type
     *(test_ptr + len + 1) = 0;
     *(test_ptr + len + 2) = 41;
 
-    *(test_ptr + len + 3) = 16;
+    //Set RR_Class( At here it's udp payload size )
+    *(test_ptr + len + 3) = 16; // the first byte of it
 
-
+    //Set RD_Length
     *(test_ptr + len + 10) = 11;
-    *(test_ptr + len + 12) = 8;
-    *(test_ptr + len + 14) = 7;
-    *(test_ptr + len + 16) = 1;
-    *(test_ptr + len + 17) = 24;
-    *(test_ptr + len + 18) = 0;
 
-    struct in_addr xx;
+    //Set RData
+    //The after things are in the example of Document <Client Subnet in DNS Requests>
+    *(test_ptr + len + 12) = 8; // It's Option-Code
+    *(test_ptr + len + 14) = 7; // It's Option-Length
+    *(test_ptr + len + 16) = 1; // It's Family "1" means IPV4
+    *(test_ptr + len + 17) = 24; // It's SOURCE NETMASK
+    *(test_ptr + len + 18) = 0; // It's SCOPE NETMASK
 
-    inet_aton("116.192.20.144", &xx);
+
+    // After is Address Information
 //    *(test_ptr + len + 19) = 173;
     *(test_ptr + len + 19) = 116;
     *(test_ptr + len + 20) = 192;
