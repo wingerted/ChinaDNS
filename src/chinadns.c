@@ -383,9 +383,6 @@ static void dns_handle_local() {
 
 
     for (i = 0; i < dns_servers_len; i++) {
-
-      //global_buf
-
       if (-1 == sendto(remote_sock, global_buf, len+23, 0,
                        dns_server_addrs[i].addr, dns_server_addrs[i].addrlen))
         ERR("sendto");
@@ -468,8 +465,7 @@ static id_addr_t *queue_lookup(uint16_t id) {
 
 int parse_netprefix(struct sockaddr **sa, uint32_t *netmask, const char *value) {
   struct addrinfo *res, hints;
-  char *addr, *slash;
-  uint32_t result;
+  char *addr;
 
   addr = strdup(value);
   //TODO: Support netmask
@@ -477,7 +473,7 @@ int parse_netprefix(struct sockaddr **sa, uint32_t *netmask, const char *value) 
 
   memset(&hints, 0, sizeof(hints));
   hints.ai_flags = AI_NUMERICHOST;
-  if ((result = getaddrinfo(addr, NULL, &hints, &res)) != 0) {
+  if (getaddrinfo(addr, NULL, &hints, &res) != 0) {
     free(addr);
     return -1;
   }
@@ -494,7 +490,17 @@ int parse_netprefix(struct sockaddr **sa, uint32_t *netmask, const char *value) 
 
   freeaddrinfo(res);
   return 0;
+}
 
+void buffer_putuint16(char **buffer, uint16_t value) {
+  (*buffer)[0] = (unsigned char)((value & 0xff00U) >> 8);
+  (*buffer)[1] = (unsigned char)(value & 0x00ffU);
+  *buffer += 2;
+}
+
+void buffer_putuint8(char **buffer, uint8_t value) {
+  **buffer = value;
+  *buffer += 1;
 }
 
 static char *hostname_buf = NULL;
@@ -518,44 +524,40 @@ static const char *hostname_from_question(ns_msg msg, int len) {
 
     parse_netprefix(&ecs_addr, &ecs_len, "116.192.255.210");
 
-    u_char *test_ptr = global_buf; //Get the buffer address
+    char *buffer_ptr = global_buf + len; //Get the buffer address
 
-    //Set Additional RRs count
-    *(test_ptr + 11) = 1;
+    // Set Additional RRs count
+    (*(global_buf + 11))++;
 
-    *(test_ptr + len) = 0;
-    //Set Type
-    *(test_ptr + len + 1) = 0;
-    *(test_ptr + len + 2) = 41;
-
-    //Set RR_Class( At here it's udp payload size )
-    *(test_ptr + len + 3) = 16; // the first byte of it
-    *(test_ptr + len + 4) = 0;
-    *(test_ptr + len + 5) = 0;
-    *(test_ptr + len + 6) = 0;
-    *(test_ptr + len + 7) = 0;
-    *(test_ptr + len + 8) = 0;
-    *(test_ptr + len + 9) = 0;
-
-    //Set RD_Length
-    *(test_ptr + len + 10) = 12;
-
-
+    //test_ptr2 += len;
+    // Set Root
+    buffer_putuint8(&buffer_ptr, 0);
+    // Set Type
+    buffer_putuint16(&buffer_ptr, 41);
+    // Set RR_Class( At here it's udp payload size )
+    buffer_putuint16(&buffer_ptr, 4096);
+    // Set TTL( At here it's empty )
+    buffer_putuint16(&buffer_ptr, 0);
+    buffer_putuint16(&buffer_ptr, 0);
+    // Set RD_Length
+    buffer_putuint16(&buffer_ptr, 12);
+    // Set RData
+    // The after things are in the example of Document <Client Subnet in DNS Requests>
     size_t  addrl = (ecs_len + 7) / 8;
-    //Set RData
-    //The after things are in the example of Document <Client Subnet in DNS Requests>
-    *(test_ptr + len + 11) = 0;
-    *(test_ptr + len + 12) = 8; // It's Option-Code
-    *(test_ptr + len + 13) = 0;
-    *(test_ptr + len + 14) = 4 + addrl; // It's Option-Length
-    *(test_ptr + len + 15) = 0;
-    *(test_ptr + len + 16) = 1; // It's Family "1" means IPV4
-    *(test_ptr + len + 17) = ecs_len; // It's SOURCE NETMASK
-    *(test_ptr + len + 18) = 0; // It's SCOPE NETMASK
+    // Set Option-Code
+    buffer_putuint16(&buffer_ptr, 8);
+    // Set Option-Length
+    buffer_putuint16(&buffer_ptr, 4 + addrl);
+    // Set Family "1" means IPV4
+    buffer_putuint16(&buffer_ptr, 1);
+    // Set SOURCE NETMASK
+    buffer_putuint8(&buffer_ptr, ecs_len);
+    // Set SCOPE NETMASK
+    buffer_putuint8(&buffer_ptr, 0);
 
     // After is Address Information
     struct sockaddr_in *ad = (struct sockaddr_in *) ecs_addr;
-    memcpy((test_ptr + len + 19), &ad->sin_addr, addrl);
+    memcpy((buffer_ptr), &ad->sin_addr, addrl);
     free(ecs_addr);
 
     result = ns_rr_name(rr);
