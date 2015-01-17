@@ -63,8 +63,8 @@ static const char *version = "ChinaDNS";
 #endif
 
 static const char *default_dns_servers =
-       // "114.114.114.114,8.8.8.8,8.8.4.4,208.67.222.222:443,208.67.222.222:5353";
-        "8.8.8.8";
+       //"114.114.114.114";//,8.8.8.8,8.8.4.4,208.67.222.222:443,208.67.222.222:5353";
+        "8.8.4.4";
 static char *dns_servers = NULL;
 static int dns_servers_len;
 static id_addr_t *dns_server_addrs;
@@ -79,6 +79,7 @@ static const char *default_listen_port = "53";
 
 static char *listen_addr = NULL;
 static char *listen_port = NULL;
+static char *client_ip = NULL;
 
 static const char *default_ip_list_file = "iplist.txt";
 static char *ip_list_file = NULL;

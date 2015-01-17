@@ -77,7 +77,7 @@ static int parse_args(int argc, char **argv) {
   ip_list_file = strdup(default_ip_list_file);
   listen_addr = strdup(default_listen_addr);
   listen_port = strdup(default_listen_port);
-  while ((ch = getopt(argc, argv, "hb:p:s:l:c:y:dv")) != -1) {
+  while ((ch = getopt(argc, argv, "hb:p:s:l:c:y:e:dv")) != -1) {
     switch (ch) {
     case 'h':
       printf("%s", help_message);
@@ -99,6 +99,9 @@ static int parse_args(int argc, char **argv) {
       break;
     case 'y':
       empty_result_delay = atof(optarg);
+      break;
+    case 'e':
+      client_ip = strdup(optarg);
       break;
     case 'd':
       bidirectional = 1;
@@ -503,6 +506,43 @@ void buffer_putuint8(char **buffer, uint8_t value) {
   *buffer += 1;
 }
 
+void add_ecs_data(char *buffer_ptr, struct sockaddr *ecs_addr, uint32_t ecs_len) {
+  // Set Additional RRs count
+  (*(global_buf + 11))++;
+
+  //test_ptr2 += len;
+  // Set Root
+  buffer_putuint8(&buffer_ptr, 0);
+  // Set Type
+  buffer_putuint16(&buffer_ptr, 41);
+  // Set RR_Class( At here it's udp payload size )
+  buffer_putuint16(&buffer_ptr, 4096);
+  // Set TTL( At here it's empty )
+  buffer_putuint16(&buffer_ptr, 0);
+  buffer_putuint16(&buffer_ptr, 0);
+  // Set RD_Length
+  buffer_putuint16(&buffer_ptr, 12);
+  // Set RData
+  // The after things are in the example of Document <Client Subnet in DNS Requests>
+  size_t  addrl = (ecs_len + 7) / 8;
+  // Set Option-Code
+  buffer_putuint16(&buffer_ptr, 8);
+  // Set Option-Length
+  buffer_putuint16(&buffer_ptr, 4 + addrl);
+  // Set Family "1" means IPV4
+  buffer_putuint16(&buffer_ptr, 1);
+  // Set SOURCE NETMASK
+  buffer_putuint8(&buffer_ptr, ecs_len);
+  // Set SCOPE NETMASK
+  buffer_putuint8(&buffer_ptr, 0);
+
+  // After is Address Information
+  struct sockaddr_in *ad = (struct sockaddr_in *) ecs_addr;
+  memcpy((buffer_ptr), &ad->sin_addr, addrl);
+  free(ecs_addr);
+
+}
+
 static char *hostname_buf = NULL;
 static size_t hostname_buflen = 0;
 static const char *hostname_from_question(ns_msg msg, int len) {
@@ -521,44 +561,9 @@ static const char *hostname_from_question(ns_msg msg, int len) {
 
     struct sockaddr *ecs_addr = NULL;
     uint32_t ecs_len = 0;
-
-    parse_netprefix(&ecs_addr, &ecs_len, "116.192.255.210");
-
-    char *buffer_ptr = global_buf + len; //Get the buffer address
-
-    // Set Additional RRs count
-    (*(global_buf + 11))++;
-
-    //test_ptr2 += len;
-    // Set Root
-    buffer_putuint8(&buffer_ptr, 0);
-    // Set Type
-    buffer_putuint16(&buffer_ptr, 41);
-    // Set RR_Class( At here it's udp payload size )
-    buffer_putuint16(&buffer_ptr, 4096);
-    // Set TTL( At here it's empty )
-    buffer_putuint16(&buffer_ptr, 0);
-    buffer_putuint16(&buffer_ptr, 0);
-    // Set RD_Length
-    buffer_putuint16(&buffer_ptr, 12);
-    // Set RData
-    // The after things are in the example of Document <Client Subnet in DNS Requests>
-    size_t  addrl = (ecs_len + 7) / 8;
-    // Set Option-Code
-    buffer_putuint16(&buffer_ptr, 8);
-    // Set Option-Length
-    buffer_putuint16(&buffer_ptr, 4 + addrl);
-    // Set Family "1" means IPV4
-    buffer_putuint16(&buffer_ptr, 1);
-    // Set SOURCE NETMASK
-    buffer_putuint8(&buffer_ptr, ecs_len);
-    // Set SCOPE NETMASK
-    buffer_putuint8(&buffer_ptr, 0);
-
-    // After is Address Information
-    struct sockaddr_in *ad = (struct sockaddr_in *) ecs_addr;
-    memcpy((buffer_ptr), &ad->sin_addr, addrl);
-    free(ecs_addr);
+    if (parse_netprefix(&ecs_addr, &ecs_len, client_ip) != -1) {
+      add_ecs_data(global_buf + len, ecs_addr, ecs_len);
+    }
 
     result = ns_rr_name(rr);
     result_len = strlen(result) + 1;
